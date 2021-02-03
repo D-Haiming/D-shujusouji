@@ -1,0 +1,106 @@
+# -*- codeing = utf-8 -*-
+# @Time : 2021/1/14 9:28
+# @Author : Haiming
+＃@文件：urlxinxi
+＃@软件：PyCharm
+# coding: utf-8
+
+"""
+网址信息爬虫
+2021.01.11
+"""
+import socket
+import time
+from selenium import webdriver
+from tld import get_tld
+from lxml import etree
+from selenium.webdriver.chrome.options import Options
+
+
+
+class Link_Spider(object):
+    def __init__(self):
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        self.driver = webdriver.Chrome(chrome_options=chrome_options, keep_alive=False)
+
+    def link_spider(self, url):
+        self.driver.get(url)
+        return self.driver.current_url, self.driver.title
+
+    def getIP(self, domain):
+        myaddr = socket.getaddrinfo(domain, 'http')
+        return myaddr[0][4][0]
+
+    def save_to_csv(self, file_name, data):
+        with open(file_name, 'a', encoding='utf-8', newline='') as fp:
+            fp.write(data)
+            fp.flush()
+
+    def read_url_data(self, file_name=''):
+        with open(file_name, 'r', encoding='utf-8') as fp:
+            url_data = fp.readlines()
+        return url_data
+
+    def get_add(self, ip):
+        url = f'https://tool.lu/ip/'
+        self.driver.get(url)
+        self.driver.find_element_by_xpath('//*[@id="main_form"]/p[2]/input').clear()
+        self.driver.find_element_by_xpath('//*[@id="main_form"]/p[2]/input').send_keys(ip)
+        self.driver.find_element_by_xpath('//*[@id="main_form"]/p[2]/button').click()
+        time.sleep(1)
+        html = etree.HTML(self.driver.page_source)
+        add = html.xpath('//*[@id="ipip_address"]/text()')
+        return add
+
+    def get_hosts(self, url):
+        return get_tld(url, as_object=True).parsed_url.netloc
+
+    def run(self):
+        url_list = self.read_url_data('data.txt')
+        url_list = [i for i in url_list if len(i) > 3]
+        for i in range(len(url_list)):
+            url = str(url_list[i]).replace('\n', '').lower()
+            if 'http:/' in url:
+                url2 = url
+            elif 'https:/' in url:
+                url2 = url
+            else:
+                url2 = 'http://' + url
+            print('[INFO]: 开始url：', url2)
+            try:
+                d_url, d_title = self.link_spider(url2)
+                print('[INFO]: 网址：', d_url)
+                print('[INFO]: 标题：', d_title)
+                hosts = self.get_hosts(d_url)
+                print('[INFO]: 域名：', hosts)
+                try:
+                    ip = self.getIP(hosts)
+                except:
+                    ip = self.getIP(hosts)
+                print('[INFO]: ip：', ip)
+                try:
+                    add = self.get_add(ip)[0]
+                except:
+                    add = ''
+                    add2 = self.get_add(ip)
+                    for i in add2:
+                        add += i
+                print('[INFO]: 归属地', add)
+            except:
+                d_url = '打不开'
+                d_title = ''
+                hosts = ''
+                ip = ''
+                add = ''
+
+            file_name = 'data.csv'
+            data = url + ',' + d_url + ',' + \
+                   str(d_title).replace(',', '，') + ',' + \
+                   hosts + ',' + ip + ',' + str(add) + '\n'
+            self.save_to_csv(file_name, data)
+            time.sleep(1)
+
+if __name__ == '__main__':
+    l = Link_Spider()
+    l.run()
